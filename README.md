@@ -33,6 +33,25 @@ kb_import                 kb_search                    plugin_database:hot_promo
 - 索引要求 sqlite 驱动（vec0 / FTS5 是 sqlite 能力）；vec0 缺失自动退化为
   numpy 余弦扫描，FTS5 缺失时跳过 BM25 通道（能力探测见 `db_capabilities`）
 
+## 测试
+
+```bash
+python -m pytest tests -q
+python tests/stub_run.py      # 桩链路检查（12 项）
+```
+
+> 测试需要 **`plugin_database` 作为同级目录**（`../plugin_database`）：
+> `tests/conftest.py` 会跨目录加载它的 `adapters/` 与 `hot_schema.py`。
+> 因此单独克隆本仓库跑测试会报
+> `ModuleNotFoundError: No module named 'aiosqlite'` —— 那是
+> `plugin_database/vendor/` 未补齐的连带结果。把两个仓库克隆到同一父目录、
+> 并按 plugin_database 的 README 补齐其 `vendor/` 即可：
+>
+> ```bash
+> git clone https://github.com/addsas222/plugin_database
+> git clone https://github.com/addsas222/plugin_knowledge_base
+> ```
+
 ## 模型
 
 all-MiniLM-L6-v2（384 维）ONNX 导出，推理用宿主自带的 onnxruntime + tokenizers，

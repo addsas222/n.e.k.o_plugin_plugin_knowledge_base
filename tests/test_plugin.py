@@ -53,6 +53,16 @@ ADAPTER: SQLiteAdapter = None  # 由 fixture 填充
 @pytest.fixture()
 async def kb(tmp_path):
     global ADAPTER
+    # 依赖缺失时给出可操作的跳过原因，而不是让整套测试以难懂的
+    # ModuleNotFoundError 崩掉（全新克隆最常见：models/ 与 vendor/ 未补齐）。
+    model_dir = PLUGIN_DIR / "models" / "all-MiniLM-L6-v2"
+    if not (model_dir / "model.onnx").is_file():
+        pytest.skip(f"嵌入模型不在 {model_dir}（models/ 被 .gitignore 排除，见 README「模型」）")
+    try:
+        import sqlite_vec  # noqa: F401
+    except ImportError:
+        pytest.skip("sqlite_vec 不可用（plugin_database/vendor/ 未补齐，见其 README「依赖」）")
+
     ADAPTER = SQLiteAdapter()
     db_path = tmp_path / "kb.db"
     await ADAPTER.connect({"path": str(db_path)})
@@ -70,7 +80,7 @@ async def kb(tmp_path):
     await register_hot_schema(ADAPTER)
     db = DirectDb()
     caps = await init_index(db)
-    embedder = OnnxEmbedder(PLUGIN_DIR / "models" / "all-MiniLM-L6-v2")
+    embedder = OnnxEmbedder(model_dir)
     embedder.load()
     yield db, embedder, caps
     await ADAPTER.close()
