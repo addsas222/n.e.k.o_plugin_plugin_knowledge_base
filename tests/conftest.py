@@ -6,6 +6,7 @@ engine 与 adapters 都不 import plugin.sdk（宿主之外可独立运行），
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import sys
 import warnings as _warnings
@@ -60,7 +61,9 @@ _hot_spec.loader.exec_module(_hot_mod)
 with _warnings.catch_warnings():
     _warnings.filterwarnings("ignore", message=r"plugin\.settings\.PLUGIN_CONFIG_ROOT is deprecated")
     try:
-        import plugin.settings  # noqa: F401
+        # 只为副作用导入（首次注册触发弃用警告）；用 import_module 而非
+        # import 语句，避免把「按副作用导入」写成未使用的绑定。
+        importlib.import_module("plugin.settings")
     except Exception:
         pass
 

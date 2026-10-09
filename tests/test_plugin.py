@@ -11,22 +11,22 @@ from pathlib import Path
 
 import pytest
 
-PLUGIN_DIR = Path(__file__).resolve().parents[1]
-SIBLING_DB = PLUGIN_DIR.parent / "plugin_database"
-
-# E402：这些模块由 conftest.py 用 importlib 在运行时注册进 sys.modules
-# （kb_engine / plugin_database.adapters / hot_schema 都绕开宿主 SDK），
-# 因此导入必须写在 conftest 执行之后，不能上移到文件顶部。
-from kb_engine import (  # noqa: E402
+# 这些模块由 tests/conftest.py 在收集阶段用 importlib 注册进 sys.modules
+# （kb_engine / plugin_database.adapters / hot_schema 都绕开宿主 SDK）。
+# pytest 保证 conftest.py 先于测试模块被导入，因此可以放在模块顶层。
+from kb_engine import (
     HotConfig,
     OnnxEmbedder,
     import_document,
     init_index,
     search_with_hot_tracking,
 )
-from kb_engine.hot import sweep_demotions  # noqa: E402  # 测试专用：生产路径走 plugin_database:hot_demote
-from plugin_database.adapters import SQLiteAdapter  # noqa: E402
-from plugin_database.hot_schema import register_hot_schema  # noqa: E402
+from kb_engine.hot import sweep_demotions  # 测试专用：生产路径走 plugin_database:hot_demote
+from plugin_database.adapters import SQLiteAdapter
+from plugin_database.hot_schema import register_hot_schema
+
+PLUGIN_DIR = Path(__file__).resolve().parents[1]
+SIBLING_DB = PLUGIN_DIR.parent / "plugin_database"
 
 # ---------------------------------------------------------------------------
 # DbClient：进程内直连 sqlite 适配器（与跨插件入口同构）
