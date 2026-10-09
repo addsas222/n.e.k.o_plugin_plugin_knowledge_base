@@ -15,6 +15,11 @@ from pathlib import Path
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
 SIBLING_DB = PLUGIN_DIR.parent / "plugin_database"
 
+#: sibling plugin_database 不在时，依赖它的集成测试会自行 skip
+#: （见 test_plugin.py 的 _NEEDS_SIBLING）；纯引擎测试不受影响。
+#: CI 只检出本仓库，因此这里不能抛 ImportError 让整套测试报错。
+SIBLING_DB_PRESENT = (SIBLING_DB / "adapters" / "__init__.py").is_file()
+
 
 def _load_package(name: str, init_path: Path, search_dir: Path) -> None:
     if name in sys.modules:
@@ -31,22 +36,23 @@ def _load_package(name: str, init_path: Path, search_dir: Path) -> None:
 _load_package("kb_engine", PLUGIN_DIR / "engine" / "__init__.py", PLUGIN_DIR / "engine")
 
 # plugin_database.adapters + hot_schema：真实 sqlite 适配器（含 vendor 路径）
-_vendor = SIBLING_DB / "vendor"
-if _vendor.is_dir() and str(_vendor) not in sys.path:
-    sys.path.insert(0, str(_vendor))
-# plugin_database/__init__ 依赖宿主 SDK，不能整包加载；只加载 adapters 与
-# hot_schema 两个子模块（它们的相对导入指向 adapters 包内部）。
-_load_package(
-    "plugin_database.adapters",
-    SIBLING_DB / "adapters" / "__init__.py",
-    SIBLING_DB / "adapters",
-)
-_hot_spec = importlib.util.spec_from_file_location(
-    "plugin_database.hot_schema", SIBLING_DB / "hot_schema.py"
-)
-_hot_mod = importlib.util.module_from_spec(_hot_spec)
-sys.modules["plugin_database.hot_schema"] = _hot_mod
-_hot_spec.loader.exec_module(_hot_mod)
+if SIBLING_DB_PRESENT:
+    _vendor = SIBLING_DB / "vendor"
+    if _vendor.is_dir() and str(_vendor) not in sys.path:
+        sys.path.insert(0, str(_vendor))
+    # plugin_database/__init__ 依赖宿主 SDK，不能整包加载；只加载 adapters 与
+    # hot_schema 两个子模块（它们的相对导入指向 adapters 包内部）。
+    _load_package(
+        "plugin_database.adapters",
+        SIBLING_DB / "adapters" / "__init__.py",
+        SIBLING_DB / "adapters",
+    )
+    _hot_spec = importlib.util.spec_from_file_location(
+        "plugin_database.hot_schema", SIBLING_DB / "hot_schema.py"
+    )
+    _hot_mod = importlib.util.module_from_spec(_hot_spec)
+    sys.modules["plugin_database.hot_schema"] = _hot_mod
+    _hot_spec.loader.exec_module(_hot_mod)
 
 
 # ---------------------------------------------------------------------------

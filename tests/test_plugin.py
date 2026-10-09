@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
-# 这些模块由 tests/conftest.py 在收集阶段用 importlib 注册进 sys.modules
-# （kb_engine / plugin_database.adapters / hot_schema 都绕开宿主 SDK）。
-# pytest 保证 conftest.py 先于测试模块被导入，因此可以放在模块顶层。
+# kb_engine 由 tests/conftest.py 在收集阶段用 importlib 注册进 sys.modules
+# （绕开宿主 SDK）。pytest 保证 conftest.py 先于测试模块被导入。
+# 分块/文件读取这些纯引擎测试因此**不依赖** sibling plugin_database，
+# 在只检出本仓库的 CI 上也能跑。
 from kb_engine import (
     HotConfig,
     OnnxEmbedder,
@@ -22,11 +23,24 @@ from kb_engine import (
     search_with_hot_tracking,
 )
 from kb_engine.hot import sweep_demotions  # 测试专用：生产路径走 plugin_database:hot_demote
-from plugin_database.adapters import SQLiteAdapter
-from plugin_database.hot_schema import register_hot_schema
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
 SIBLING_DB = PLUGIN_DIR.parent / "plugin_database"
+
+#: 集成测试需要同级 plugin_database 的真实适配器与 hot_schema。
+#: 单独检出本仓库时（如 CI）这些模块不存在 —— 用 module 级 skip 标记，
+#: 而不是让顶层 import 抛 ImportError 把纯引擎测试一起带走。
+_NEEDS_SIBLING = pytest.mark.skipif(
+    not (SIBLING_DB / "adapters" / "__init__.py").is_file(),
+    reason=f"需要同级 plugin_database（{SIBLING_DB}）；见 README「测试」",
+)
+
+if (SIBLING_DB / "adapters" / "__init__.py").is_file():
+    from plugin_database.adapters import SQLiteAdapter
+    from plugin_database.hot_schema import register_hot_schema
+else:  # 仅为让模块可导入；带 _NEEDS_SIBLING 的测试不会执行
+    SQLiteAdapter = None
+    register_hot_schema = None
 
 # ---------------------------------------------------------------------------
 # DbClient：进程内直连 sqlite 适配器（与跨插件入口同构）
@@ -143,6 +157,7 @@ def test_chunker_paragraph_and_overlap():
 # ---------------------------------------------------------------------------
 
 
+@_NEEDS_SIBLING
 async def test_import_search_promotion_chain(tmp_path, kb):
     db, embedder, caps = kb
     assert caps["vec0"] and caps["fts5"]
@@ -195,6 +210,7 @@ async def test_import_search_promotion_chain(tmp_path, kb):
     assert len(promoted) == before, "清空窗口后紧接的一次检索不得重复提升"
 
 
+@_NEEDS_SIBLING
 async def test_demotion_sweep(tmp_path, kb):
     """``sweep_demotions`` 是**测试专用**的旧降级实现（生产走
     ``plugin_database:hot_demote``，见 engine/hot.py 的 deprecated 说明）。
@@ -230,6 +246,7 @@ def make_demote_entry():
 # ---------------------------------------------------------------------------
 
 
+@_NEEDS_SIBLING
 async def test_import_dedup(tmp_path, kb):
     db, embedder, caps = kb
     (tmp_path / "a.md").write_text("# 标题\n\n唯一内容，用于去重测试。", encoding="utf-8")
@@ -257,6 +274,7 @@ async def _noop_promote(payload):
     return None
 
 
+@_NEEDS_SIBLING
 async def test_numpy_fallback_channel(tmp_path, kb):
     db, embedder, caps = kb
     kbdir = tmp_path / "kb2"
@@ -278,6 +296,7 @@ async def test_numpy_fallback_channel(tmp_path, kb):
 # ---------------------------------------------------------------------------
 
 
+@_NEEDS_SIBLING
 async def test_chinese_bm25_channel(tmp_path, kb):
     db, embedder, caps = kb
     kbdir = tmp_path / "kb3"
